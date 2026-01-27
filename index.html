@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务之星-积分商城</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入SheetJS（解析Excel） -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- 引入Font Awesome图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- 自定义配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#FF7D00',
+                        success: '#00B42A',
+                        warning: '#FF7D00',
+                        danger: '#F53F3F',
+                        light: '#F2F3F5',
+                        dark: '#1D2129',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            /* 自定义工具类 */
+            .rank-badge {
+                background: linear-gradient(135deg, #165DFF 0%, #0088FF 100%);
+                box-shadow: 0 8px 24px rgba(22, 93, 255, 0.3);
+            }
+            .prize-card {
+                transition: all 0.3s ease;
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+            }
+            .prize-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+            }
+            .prize-card-content {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+            }
+            .prize-card-btn-wrap {
+                margin-top: auto;
+            }
+            .prize-img-container {
+                position: relative;
+                width: 100%;
+                height: 180px; /* 统一图片容器高度 */
+                overflow: hidden;
+            }
+            .prize-img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover; /* 保持图片比例，填充容器 */
+                object-position: center; /* 居中显示 */
+            }
+            .login-input {
+                @apply w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all;
+            }
+            .btn-primary {
+                @apply bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 active:bg-primary/80 transition-all shadow-lg hover:shadow-xl;
+            }
+            .btn-secondary {
+                @apply bg-white text-primary border border-primary px-6 py-3 rounded-lg font-medium hover:bg-primary/5 active:bg-primary/10 transition-all;
+            }
+            .points-card {
+                @apply bg-gray-50 rounded-2xl p-6 border border-gray-200 flex flex-col justify-between;
+            }
+            .rank-card {
+                @apply rank-badge text-white rounded-2xl p-6 text-center flex flex-col justify-center;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+    <!-- 登录页面 -->
+    <div id="login-page" class="flex items-center justify-center min-h-screen px-4 py-8">
+        <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10">
+            <div class="text-center mb-8">
+                <i class="fa-solid fa-trophy text-primary text-5xl mb-4"></i>
+                <h1 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-dark">服务之星-积分商城</h1>
+                <p class="text-gray-500 mt-2">请输入您的域账号登录</p>
+            </div>
+            
+            <div class="mb-6">
+                <label for="domain-account" class="block text-sm font-medium text-gray-700 mb-2">域账号</label>
+                <input type="text" id="domain-account" class="login-input" placeholder="" value="">
+            </div>
+            
+            <button id="login-btn" class="btn-primary w-full">
+                <i class="fa-solid fa-right-to-bracket mr-2"></i> 登录
+            </button>
+            
+            <p id="login-error" class="text-danger text-center mt-4 hidden">账号不存在，请检查后重试</p>
+        </div>
+    </div>
+
+    <!-- 商城主页（初始隐藏） -->
+    <div id="mall-page" class="hidden min-h-screen">
+        <!-- 顶部导航栏 -->
+        <header class="bg-white shadow-md sticky top-0 z-50">
+            <div class="container mx-auto px-4 py-3 md:py-4 flex justify-between items-center">
+                <div class="flex items-center">
+                    <i class="fa-solid fa-trophy text-primary text-2xl mr-3"></i>
+                    <h1 class="text-lg md:text-xl font-bold text-dark">服务之星-积分商城</h1>
+                </div>
+                <div class="flex items-center">
+                    <span id="user-account" class="text-gray-700 mr-3 md:mr-4 text-sm md:text-base">ylzhou20</span>
+                    <button id="logout-btn" class="text-gray-500 hover:text-primary transition-colors text-sm md:text-base">
+                        <i class="fa-solid fa-right-from-bracket mr-1"></i> 退出
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 核心数据展示区 -->
+        <section class="container mx-auto px-4 py-6 md:py-8">
+            <div class="bg-white rounded-2xl shadow-lg p-5 md:p-6 mb-6 md:mb-8">
+                <!-- 积分与排名核心卡片 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 md:gap-6 mb-6">
+                    <!-- 排名展示（重点突出） -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- 部门排名 -->
+                        <div id="dept-rank-card" class="rank-card">
+                            <p class="text-sm opacity-80 mb-1">部门排名</p>
+                            <div class="text-[clamp(1.8rem,5vw,3.5rem)] font-bold mb-1" id="dept-rank">TOP 3</div>
+                            <p class="text-sm opacity-90" id="dept-name">技术部</p>
+                        </div>
+                        
+                        <!-- 组别排名 -->
+                        <div id="group-rank-card" class="rank-card">
+                            <p class="text-sm opacity-80 mb-1">组别排名</p>
+                            <div class="text-[clamp(1.8rem,5vw,3.5rem)] font-bold mb-1" id="group-rank">TOP 1</div>
+                            <p class="text-sm opacity-90" id="group-name">前端组</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 积分信息 -->
+                    <div class="points-card">
+                        <div class="mb-4">
+                            <h2 class="text-lg font-semibold text-dark mb-1">积分信息</h2>
+                            <p class="text-xs text-gray-500">积分可兑换下方奖品，有效期以活动规则为准</p>
+                        </div>
+                        
+                        <div class="flex flex-wrap gap-4 mb-5">
+                            <button id="points-record-btn" class="btn-secondary px-4 py-2 text-sm flex-1 min-w-[120px]">
+                                <i class="fa-solid fa-clock-rotate-left mr-1"></i> 积分记录
+                            </button>
+                            <button id="exchange-record-btn" class="btn-secondary px-4 py-2 text-sm flex-1 min-w-[120px]">
+                                <i class="fa-solid fa-receipt mr-1"></i> 兑换记录
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-6">
+                            <div class="text-center bg-white rounded-xl p-4 shadow-sm">
+                                <p class="text-gray-500 text-sm mb-1">累计积分</p>
+                                <p class="text-2xl md:text-3xl font-bold text-primary" id="total-points">2800</p>
+                            </div>
+                            <div class="text-center bg-white rounded-xl p-4 shadow-sm">
+                                <p class="text-gray-500 text-sm mb-1">当前积分</p>
+                                <p class="text-2xl md:text-3xl font-bold text-secondary" id="current-points">1500</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 积分/兑换记录弹窗（初始隐藏） -->
+                <div id="record-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden p-4">
+                    <div class="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-auto p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 id="record-modal-title" class="text-xl font-bold text-dark">积分记录</h3>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-dark p-2">
+                                <i class="fa-solid fa-xmark text-xl"></i>
+                            </button>
+                        </div>
+                        <div id="record-content" class="text-gray-700">
+                            <!-- 记录内容动态渲染 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 奖品列表 -->
+            <div class="mb-8">
+                <h2 class="text-xl font-bold text-dark mb-5 md:mb-6 flex items-center">
+                    <i class="fa-solid fa-gift text-primary mr-2"></i> 奖品兑换区
+                </h2>
+                
+                <div id="prize-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    <!-- 奖品卡片动态渲染 -->
+                </div>
+                
+                <div id="no-prize" class="text-center py-12 text-gray-500 hidden">
+                    <i class="fa-solid fa-box-open text-5xl mb-4"></i>
+                    <p>暂无可兑换的奖品</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 页脚 -->
+        <footer class="bg-dark text-white py-5 md:py-6 mt-auto">
+            <div class="container mx-auto px-4 text-center">
+                <p class="text-sm md:text-base">© 2026 服务之星-积分商城 | 数据更新时间：<span id="update-time"></span></p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // 全局变量
+        let excelData = {
+            employees: [], // 员工积分表数据
+            prizes: []     // 奖品列表数据
+        };
+        let currentUser = null;
+        
+        // Excel文件路径（替换为你GitHub上的文件URL）
+        const EXCEL_FILE_URL = "服务之星-积分商城.xlsx";
+        
+        // 兑换表单链接（替换为你的在线信息收集表链接）
+        const EXCHANGE_FORM_URL = "https://docs.qq.com/form/page/DQnhUcnBCRmFEcndI";
+
+        // 初始化：加载Excel数据
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadExcelData();
+            bindEventListeners();
+            
+            // 设置页面更新时间
+            document.getElementById('update-time').textContent = new Date().toLocaleString();
+        });
+
+        // 加载Excel数据
+        async function loadExcelData() {
+            try {
+                // 读取Excel文件
+                const response = await fetch(EXCEL_FILE_URL);
+                const arrayBuffer = await response.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                
+                // 解析员工积分表（sheet1）
+                const employeeSheet = workbook.Sheets['员工积分表'];
+                excelData.employees = XLSX.utils.sheet_to_json(employeeSheet);
+                
+                // 解析奖品列表（sheet2）
+                const prizeSheet = workbook.Sheets['奖品列表'];
+                excelData.prizes = XLSX.utils.sheet_to_json(prizeSheet);
+                
+                // 过滤过期奖品并排序
+                excelData.prizes = processPrizeData(excelData.prizes);
+                
+            } catch (error) {
+                console.error('加载Excel数据失败：', error);
+                // 本地测试用默认数据
+                initTestData();
+                // 处理测试数据的排序
+                excelData.prizes = processPrizeData(excelData.prizes);
+            }
+        }
+
+        // 处理奖品数据：过滤过期 + 排序（快过期>限时>不限时）
+        function processPrizeData(prizes) {
+            const now = new Date();
+            const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+            // 过滤过期奖品
+            const validPrizes = prizes.filter(prize => {
+                if (!prize['截止时间'] || prize['截止时间'] === '') return true;
+                
+                // 解析截止日期（兼容Excel日期格式）
+                const deadline = parseExcelDate(prize['截止时间']);
+                return deadline > now;
+            });
+
+            // 排序：
+            // 1. 7天内过期的限时奖品（最前）
+            // 2. 其他限时奖品
+            // 3. 不限时奖品（保持原顺序）
+            const nearExpire = []; // 7天内过期
+            const limitedTime = []; // 限时但非7天内过期
+            const unlimited = [];   // 不限时
+
+            validPrizes.forEach(prize => {
+                if (!prize['截止时间'] || prize['截止时间'] === '') {
+                    unlimited.push(prize);
+                } else {
+                    const deadline = parseExcelDate(prize['截止时间']);
+                    if (deadline <= sevenDaysLater) {
+                        nearExpire.push(prize);
+                    } else {
+                        limitedTime.push(prize);
+                    }
+                }
+            });
+
+            // 合并排序结果
+            return [...nearExpire, ...limitedTime, ...unlimited];
+        }
+
+        // 解析Excel日期（Excel日期是从1900-01-01开始的天数）
+        function parseExcelDate(excelDate) {
+            if (typeof excelDate === 'number') {
+                const baseDate = new Date(1899, 11, 30); // Excel日期基准
+                return new Date(baseDate.getTime() + excelDate * 24 * 60 * 60 * 1000);
+            }
+            return new Date(excelDate);
+        }
+
+        // 初始化测试数据（无Excel文件时使用）
+        function initTestData() {
+            // 测试员工数据
+            excelData.employees = [{
+                '域账号': 'ylzhou20',
+                '部门': '客户服务部',
+                '组别': '质检组',
+                '累计积分': 1314,
+                '当前积分': 1120,
+                '组内排名': 1,
+                '部门排名': 3,
+                '积分记录': '2026-01-01 +1000（月度奖励）;2026-01-10 -500（兑换水杯）;2026-01-20 +300（服务好评）',
+                '兑换记录': '2026-01-10 水杯（500积分）;2026-01-15 笔记本（800积分）'
+            }];
+            
+            // 测试奖品数据
+            excelData.prizes = [
+                {
+                    '奖品名称': '小米充电宝',
+                    '奖品图片': 'https://picsum.photos/seed/prize1/600/400',
+                    '所需积分': 800,
+                    '兑换规则': '每人每月限兑换1个',
+                    '截止时间': '2026-03-31'
+                },
+                {
+                    '奖品名称': '星巴克咖啡券',
+                    '奖品图片': 'https://picsum.photos/seed/prize2/800/200',
+                    '所需积分': 300,
+                    '兑换规则': '无限制',
+                    '截止时间': ''
+                },
+                {
+                    '奖品名称': '京东E卡100元',
+                    '奖品图片': 'https://picsum.photos/seed/prize3/400/600',
+                    '所需积分': 1500,
+                    '兑换规则': '每人每季度限兑换2张',
+                    '截止时间': '2026-02-28' // 7天内过期示例
+                },
+                {
+                    '奖品名称': '定制笔记本',
+                    '奖品图片': 'https://picsum.photos/seed/prize4/300/300',
+                    '所需积分': 500,
+                    '兑换规则': '无限制',
+                    '截止时间': ''
+                }
+            ];
+        }
+
+        // 绑定事件监听
+        function bindEventListeners() {
+            // 登录按钮
+            document.getElementById('login-btn').addEventListener('click', login);
+            
+            // 退出登录
+            document.getElementById('logout-btn').addEventListener('click', logout);
+            
+            // 积分记录按钮
+            document.getElementById('points-record-btn').addEventListener('click', () => {
+                showRecordModal('积分记录', currentUser['积分记录'] || '暂无积分记录');
+            });
+            
+            // 兑换记录按钮
+            document.getElementById('exchange-record-btn').addEventListener('click', () => {
+                showRecordModal('兑换记录', currentUser['兑换记录'] || '暂无兑换记录');
+            });
+            
+            // 关闭弹窗
+            document.getElementById('close-modal-btn').addEventListener('click', () => {
+                document.getElementById('record-modal').classList.add('hidden');
+            });
+            
+            // 按ESC关闭弹窗
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    document.getElementById('record-modal').classList.add('hidden');
+                }
+            });
+
+            // 点击弹窗背景关闭
+            document.getElementById('record-modal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('record-modal')) {
+                    document.getElementById('record-modal').classList.add('hidden');
+                }
+            });
+        }
+
+        // 登录逻辑
+        function login() {
+            const account = document.getElementById('domain-account').value.trim();
+            const errorEl = document.getElementById('login-error');
+            
+            // 查找用户
+            currentUser = excelData.employees.find(emp => emp['域账号'] === account);
+            
+            if (currentUser) {
+                // 登录成功，展示商城页面
+                errorEl.classList.add('hidden');
+                document.getElementById('login-page').classList.add('hidden');
+                document.getElementById('mall-page').classList.remove('hidden');
+                
+                // 渲染用户数据
+                renderUserData();
+                // 渲染奖品列表
+                renderPrizeList();
+            } else {
+                // 登录失败
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        // 退出登录
+        function logout() {
+            // 重置状态
+            currentUser = null;
+            document.getElementById('domain-account').value = 'ylzhou20';
+            document.getElementById('login-error').classList.add('hidden');
+            
+            // 切换页面
+            document.getElementById('mall-page').classList.add('hidden');
+            document.getElementById('login-page').classList.remove('hidden');
+        }
+
+        // 渲染用户数据
+        function renderUserData() {
+            // 基本信息
+            document.getElementById('user-account').textContent = currentUser['域账号'];
+            document.getElementById('dept-name').textContent = currentUser['部门'] || '未知部门';
+            document.getElementById('group-name').textContent = currentUser['组别'] || '未知组别';
+            
+            // 排名（突出显示）
+            document.getElementById('dept-rank').textContent = `TOP ${currentUser['部门排名'] || '-'}`;
+            document.getElementById('group-rank').textContent = `TOP ${currentUser['组内排名'] || '-'}`;
+            
+            // 积分
+            document.getElementById('total-points').textContent = currentUser['累计积分'] || 0;
+            document.getElementById('current-points').textContent = currentUser['当前积分'] || 0;
+        }
+
+        // 渲染奖品列表
+        function renderPrizeList() {
+            const prizeListEl = document.getElementById('prize-list');
+            const noPrizeEl = document.getElementById('no-prize');
+            
+            // 清空现有内容
+            prizeListEl.innerHTML = '';
+            
+            if (excelData.prizes.length === 0) {
+                // 无奖品
+                noPrizeEl.classList.remove('hidden');
+                return;
+            }
+            
+            noPrizeEl.classList.add('hidden');
+            
+            // 渲染每个奖品
+            excelData.prizes.forEach(prize => {
+                const deadline = prize['截止时间'] ? parseExcelDate(prize['截止时间']) : null;
+                const now = new Date();
+                const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                const isNearExpire = deadline ? (deadline <= sevenDaysLater) : false;
+                
+                const prizeCard = document.createElement('div');
+                prizeCard.className = 'prize-card bg-white rounded-xl shadow-md overflow-hidden';
+                prizeCard.innerHTML = `
+                    <div class="prize-img-container">
+                        <img src="${prize['奖品图片'] || 'https://picsum.photos/300/200'}" alt="${prize['奖品名称']}" class="prize-img">
+                        ${isNearExpire ? 
+                            '<div class="absolute top-2 right-2 bg-warning text-white text-xs px-2 py-1 rounded-full">即将过期</div>' : 
+                            (prize['截止时间'] ? '<div class="absolute top-2 right-2 bg-primary/80 text-white text-xs px-2 py-1 rounded-full">限时兑换</div>' : '')
+                        }
+                    </div>
+                    <div class="prize-card-content p-4">
+                        <h3 class="font-bold text-lg mb-2">${prize['奖品名称']}</h3>
+                        <div class="flex items-center mb-2">
+                            <i class="fa-solid fa-coins text-secondary mr-1"></i>
+                            <span class="font-bold text-secondary">${prize['所需积分'] || 0} 积分</span>
+                        </div>
+                        <p class="text-gray-500 text-sm mb-2">${prize['兑换规则'] || '无特殊规则'}</p>
+                        ${deadline ? `<p class="text-gray-500 text-xs mb-2">截止时间：${deadline.toLocaleDateString()}</p>` : ''}
+                        <div class="prize-card-btn-wrap">
+                            <button class="btn-primary w-full mt-2 py-2.5" onclick="window.open('${EXCHANGE_FORM_URL}', '_blank')">
+                                <i class="fa-solid fa-gift mr-1"></i> 立即兑换
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                prizeListEl.appendChild(prizeCard);
+            });
+        }
+
+        // 展示记录弹窗
+        function showRecordModal(title, content) {
+            const modalEl = document.getElementById('record-modal');
+            const titleEl = document.getElementById('record-modal-title');
+            const contentEl = document.getElementById('record-content');
+            
+            // 设置标题和内容
+            titleEl.textContent = title;
+            
+            // 格式化记录内容
+            if (content.includes(';')) {
+                const records = content.split(';');
+                let html = '<ul class="space-y-3">';
+                records.forEach(record => {
+                    html += `<li class="p-3 bg-gray-50 rounded-lg text-sm">${record}</li>`;
+                });
+                html += '</ul>';
+                contentEl.innerHTML = html;
+            } else {
+                contentEl.innerHTML = `<p class="p-4 bg-gray-50 rounded-lg text-sm">${content}</p>`;
+            }
+            
+            // 显示弹窗
+            modalEl.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
